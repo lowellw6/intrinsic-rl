@@ -41,18 +41,15 @@ class IntrinsicBonusAgent(BaseAgent):
 
         Typically called in the sampler during startup.
 
-        :param env_spaces: passed to ``make_env_to_bonus_model_kwargs()``, typically namedtuple of 'observation' and 'action'.
+        :param env_spaces: passed to ``make_env_to_model_kwargs()`` in parent class (super),
+                           which initializes self.env_model_kwargs, used by both the base and bonus model.
+                           Typically namedtuple of 'observation' and 'action'.
         :param share_memory: whether to use shared memory for bonus_model parameters.
         """
         super().initialize(env_spaces, share_memory=share_memory, **kwargs)
-        self.env_bonus_model_kwargs = self.make_env_to_bonus_model_kwargs(env_spaces)
-        self.bonus_model = self.BonusModelCls(**self.env_bonus_model_kwargs, **self.bonus_model_kwargs)
+        self.bonus_model = self.BonusModelCls(**self.env_model_kwargs, **self.bonus_model_kwargs)
         if self.initial_bonus_model_state_dict is not None:
             self.bonus_model.load_state_dict(self.inital_bonus_model_state_dict)
-
-    def make_env_to_bonus_model_kwargs(self, env_spaces):
-        """Generate any keyword args to the bonus model which depend on environment interfaces."""
-        return {}
 
     def to_device(self, cuda_idx=None):
         """
