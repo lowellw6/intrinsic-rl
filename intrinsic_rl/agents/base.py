@@ -16,7 +16,7 @@ class IntrinsicBonusAgent(BaseAgent):
     (and not in the sampler), so it is never placed in shared memory.
     """
 
-    def __init__(self, *args, BonusModelCls=None, bonus_model_kwargs=None, initial_bonus_model_state_dict=None, **kwargs):
+    def __init__(self, BonusModelCls=None, bonus_model_kwargs=None, initial_bonus_model_state_dict=None, **kwargs):
         """
         Intrinsic bonus model info saved but not initialized.
 
@@ -26,7 +26,7 @@ class IntrinsicBonusAgent(BaseAgent):
         """
 
         save__init__args(locals())
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self.bonus_model = None  # type: torch.nn.Module
         self.shared_bonus_model = None
         if self.bonus_model_kwargs is None:
