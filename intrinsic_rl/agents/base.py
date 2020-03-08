@@ -4,8 +4,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.parallel import DistributedDataParallelCPU as DDPC
 
 from rlpyt.agents.base import BaseAgent
+from rlpyt.distributions.categorical import Categorical
 from rlpyt.utils.quick_args import save__init__args
 from rlpyt.utils.logging import logger
+from rlpyt.utils.buffer import buffer_to
 
 
 class IntrinsicBonusAgent(BaseAgent):
@@ -20,7 +22,7 @@ class IntrinsicBonusAgent(BaseAgent):
         """
         Intrinsic bonus model info saved but not initialized.
 
-        :param BonusModelCls: The bonus model class to be used.
+        :param BonusModelCls: The bonus model class to be used. See ``bonus_call`` for expected output format.
         :param bonus_model_kwargs: Any keyword arguments to pass when instantiating the bonus model.
         :param initial_bonus_model_state_dict: Initial bonus model parameter values.
         """
@@ -31,6 +33,18 @@ class IntrinsicBonusAgent(BaseAgent):
         self.shared_bonus_model = None
         if self.bonus_model_kwargs is None:
             self.bonus_model_kwargs = dict()
+
+    def bonus_call(self, observation, prev_action, prev_reward, prev_observation=None):
+        """
+        Analogous ``__call__`` function for the intrinsic bonus model, running a forward pass through it.
+        The bonus model is expected to return a tuple of the intrinsic reward and bonus info, where the latter
+        is a namedarraytuple containing any other relevant outputs from the model (such as those used in its loss).
+        """
+        if issubclass(type(self.distribution), Categorical):
+            prev_action = self.distribution.to_onehot(prev_action)
+        bonus_model_inputs = buffer_to((observation, prev_action, prev_reward, prev_observation), device=self.device)
+        int_rew, bonus_info = self.bonus_model(*bonus_model_inputs)
+        return buffer_to((int_rew, bonus_info), device="cpu")
 
     def initialize(self, env_spaces, share_memory=False, **kwargs):
         """
