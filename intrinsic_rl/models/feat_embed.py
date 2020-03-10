@@ -1,11 +1,9 @@
 
 import torch
-import torch.nn.functional as F
 
 from rlpyt.models.conv2d import Conv2dHeadModel
 
-from intrinsic_rl.models.submodules import Identity, Conv2dHeadModelFlex
-
+from intrinsic_rl.models.submodules import Conv2dHeadModelFlex
 
 
 class BasicFeatureExtractor(torch.nn.Module):
@@ -23,21 +21,21 @@ class BasicFeatureExtractor(torch.nn.Module):
             hidden_sizes=None,
             output_size=None,
             paddings=None,
-            conv_nonlinearity=Identity,
-            mlp_nonlinearity=Identity,
+            conv_nonlinearity=torch.nn.Identity,
+            mlp_nonlinearity=torch.nn.Identity,
             use_maxpool=False,
-            base_model=None
+            decision_model=None  # Base policy or q-value function
             ):
-        """Instantiate basic feature extractor. Uses base_model convolutional front-end, if available."""
+        """Instantiate basic feature extractor. Uses decision_model convolutional front-end, if available."""
         super().__init__()
-        if base_model:
-            for attr_key in dir(base_model):  # Looks for conv head model to share, assumes only one exists
-                attr = getattr(base_model, attr_key)
+        if decision_model:
+            for attr_key in dir(decision_model):  # Looks for conv head model to share, assumes only one exists
+                attr = getattr(decision_model, attr_key)
                 attr_cls = type(attr)
                 if issubclass(attr_cls, Conv2dHeadModel) or issubclass(attr_cls, Conv2dHeadModelFlex):
                     self.extractor = attr
                     return
-            raise AttributeError("Policy does not contain a convolutional head model to share")
+            raise AttributeError("Base policy / q-network does not contain a convolutional head model to share")
         else:
             assert None not in (image_shape, channels, kernel_sizes, strides, hidden_sizes)
             self.extractor = Conv2dHeadModelFlex(

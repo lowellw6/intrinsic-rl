@@ -26,7 +26,6 @@ class IntrinsicBonusAgent(BaseAgent):
         :param bonus_model_kwargs: Any keyword arguments to pass when instantiating the bonus model.
         :param initial_bonus_model_state_dict: Initial bonus model parameter values.
         """
-
         save__init__args(locals())
         super().__init__(**kwargs)
         self.bonus_model = None  # type: torch.nn.Module
