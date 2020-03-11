@@ -1,5 +1,4 @@
 
-import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.parallel import DistributedDataParallelCPU as DDPC
 
@@ -8,6 +7,8 @@ from rlpyt.distributions.categorical import Categorical
 from rlpyt.utils.quick_args import save__init__args
 from rlpyt.utils.logging import logger
 from rlpyt.utils.buffer import buffer_to
+
+from intrinsic_rl.models.base import SelfSupervisedModule
 
 
 class IntrinsicBonusAgent(BaseAgent):
@@ -28,7 +29,7 @@ class IntrinsicBonusAgent(BaseAgent):
         """
         save__init__args(locals())
         super().__init__(**kwargs)
-        self.bonus_model = None  # type: torch.nn.Module
+        self.bonus_model = None  # type: SelfSupervisedModule
         self.shared_bonus_model = None
         if self.bonus_model_kwargs is None:
             self.bonus_model_kwargs = dict()
@@ -36,14 +37,14 @@ class IntrinsicBonusAgent(BaseAgent):
     def bonus_call(self, observation, prev_action, prev_reward, prev_observation=None):
         """
         Analogous ``__call__`` function for the intrinsic bonus model, running a forward pass through it.
-        The bonus model is expected to return a tuple of the intrinsic reward and bonus info, where the latter
-        is a namedarraytuple containing any other relevant outputs from the model (such as those used in its loss).
+        The bonus model is expected to return a tuple of the intrinsic reward and bonus loss, where the latter
+        is a scalar Tensor containing the self-supervised loss of the bonus model (see ``SelfSupervisedModule``).
         """
         if issubclass(type(self.distribution), Categorical):
             prev_action = self.distribution.to_onehot(prev_action)
         bonus_model_inputs = buffer_to((observation, prev_action, prev_reward, prev_observation), device=self.device)
-        int_rew, bonus_info = self.bonus_model(*bonus_model_inputs)
-        return buffer_to((int_rew, bonus_info), device="cpu")
+        int_rew, bonus_loss = self.bonus_model(*bonus_model_inputs)
+        return buffer_to((int_rew, bonus_loss), device="cpu")
 
     def initialize(self, env_spaces, share_memory=False, **kwargs):
         """
