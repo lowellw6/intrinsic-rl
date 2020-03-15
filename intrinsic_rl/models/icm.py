@@ -1,6 +1,6 @@
 
 from intrinsic_rl.models.base import SelfSupervisedModule
-from intrinsic_rl.models.feat_embed import IdentityFeatureExtractor
+from intrinsic_rl.models.feat_embed import BaseFeatureExtractor, IdentityFeatureExtractor
 
 
 class IntrinsicCuriosityModule(SelfSupervisedModule):
@@ -21,7 +21,7 @@ class IntrinsicCuriosityModule(SelfSupervisedModule):
             ForwardDynamicsCls,  # type: SelfSupervisedModule
             forward_model_kwargs,
             forward_loss_coeff=1.,
-            FeatExtractCls=None,  # type: SelfSupervisedModule
+            FeatExtractCls=None,  # type: BaseFeatureExtractor
             feat_extract_kwargs=None,
             feat_loss_coeff=1.
             ):
@@ -30,7 +30,7 @@ class IntrinsicCuriosityModule(SelfSupervisedModule):
         self.forward_loss_coeff = forward_loss_coeff
         if not FeatExtractCls:  # Default to no-op feature extraction
             assert not feat_extract_kwargs
-            self.feat_extractor = IdentityFeatureExtractor
+            self.feat_extractor = IdentityFeatureExtractor()
         else:
             assert isinstance(feat_extract_kwargs, dict)
             self.feat_extractor = FeatExtractCls(**feat_extract_kwargs)

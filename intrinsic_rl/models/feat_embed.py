@@ -1,23 +1,54 @@
 
 import torch
+from abc import ABC, abstractmethod
 
 from rlpyt.models.conv2d import Conv2dHeadModel
+from rlpyt.models.mlp import MlpModel
 
 from intrinsic_rl.models.base import SelfSupervisedModule
 from intrinsic_rl.models.submodules import Conv2dHeadModelFlex
 from intrinsic_rl.util import trimSeq
 
 
-class IdentityFeatureExtractor(SelfSupervisedModule, torch.nn.Identity):
+class BaseFeatureExtractor(SelfSupervisedModule, ABC):
+    """
+    Abstract base feature extraction class for mapping observations
+    into feature embeddings. Inheriting classes must define the module
+    ``self.extractor`` to produce this mapping.
+    """
+
+    @abstractmethod
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, *input):
+        """
+        Maps input observations into a lower dimensional feature space.
+        This mapping function can be constant or updating alongside the baseline model.
+        Assumes leading batch dimension.
+
+        Takes an arbitrary number of observation tensors. So long as the non-batch dimensions
+        match (those after the first), these tensors are concatenated into one large batch for the
+        forward pass and are split into components again afterward.
+        """
+        batch_lens = [obs.shape[0] for obs in input]  # Will probably be same size for each
+        obs_cat = torch.cat([obs for obs in input], dim=0)
+        obs_feat_pile = self.extractor(obs_cat)
+        obs_feat_splits = torch.split(obs_feat_pile, batch_lens, dim=0)
+        return trimSeq(obs_feat_splits), torch.zeros(1)  # Zero loss, no inherent gradient update
+
+
+class IdentityFeatureExtractor(BaseFeatureExtractor):
     """Wraps torch.nn.Identity to follow self-supervised module loss provision protocol."""
 
-    def forward(self, obs):
-        return super().forward(obs), torch.zeros(1)  # Zero loss, no gradient update
+    def __init__(self):
+        super().__init__()
+        self.extractor = torch.nn.Identity()
 
 
-class BasicFeatureExtractor(SelfSupervisedModule):
+class ConvFeatureExtractor(BaseFeatureExtractor):
     """
-    Maps images to feature embedding with constant convolutional front end
+    Maps images to feature embedding with convolutional front end
     which is randomly initialized.
     """
 
@@ -35,7 +66,7 @@ class BasicFeatureExtractor(SelfSupervisedModule):
             use_maxpool=False,
             decision_model=None  # Base policy or q-value function
             ):
-        """Instantiate basic feature extractor. Uses decision_model convolutional front-end, if available."""
+        """Instantiate conv feature extractor. Uses decision_model convolutional front-end, if available."""
         super().__init__()
         if decision_model:
             for attr_key in dir(decision_model):  # Looks for conv head model to share, assumes only one exists
@@ -60,21 +91,25 @@ class BasicFeatureExtractor(SelfSupervisedModule):
                 use_maxpool=use_maxpool
             )
 
-    def forward(self, *input):
-        """
-        Maps input observations into a lower dimensional feature space.
-        This mapping function can be constant or updating alongside the baseline model.
-        Assumes input shape: [B,C,H,W]. (i.e. images)
 
-        Takes an arbitrary number of observation tensors. So long as the image dimensions [C,H,W]
-        match, these tensors are concatenated into one large batch for the forward pass and are
-        split into components again afterward.
-        """
-        batch_lens = [obs.shape[0] for obs in input]  # Will probably be same size for each
-        obs_cat = torch.cat([obs for obs in input], dim=0)
-        obs_feat_pile = self.extractor(obs_cat)
-        obs_feat_splits = torch.split(obs_feat_pile, batch_lens, dim=0)
-        return trimSeq(obs_feat_splits), torch.zeros(1)  # Zero loss, no gradient update
+class MlpFeatureExtractor(BaseFeatureExtractor):
+    """
+    Maps 1D state vectors to feature embedding with MLP.
+    Functionally equivalent to ConvFeatureExtractor but for non-image states
+    where feature extraction is still necessary (e.g. use with Inverse Dynamics
+    Feature Extraction or with Random Network Distillation).
+    """
+
+    def __init__(
+            self,
+            input_size,
+            hidden_sizes,
+            output_size=None,
+            nonlinearity=torch.nn.Identity
+            ):
+        """Instantiate MLP feature extractor. Does not support parameter sharing with base network."""
+        super().__init__()
+        self.extractor = MlpModel(input_size, hidden_sizes, output_size, nonlinearity)
 
 
 class InverseDynamicsFeatureExtractor(SelfSupervisedModule):  # TODO

@@ -1,8 +1,9 @@
 
 import torch
+from abc import ABC, abstractmethod
 
 
-class SelfSupervisedModule(torch.nn.Module):
+class SelfSupervisedModule(torch.nn.Module, ABC):
     """
     Designates derived modules as being self-supervised.
     Intended to allow other components (e.g. agent) to assume the
@@ -12,10 +13,11 @@ class SelfSupervisedModule(torch.nn.Module):
     enforced. It is up to the developer to maintain this pattern.
     """
 
+    @abstractmethod
     def forward(self, *input) -> (torch.Tensor, torch.Tensor) or ((torch.Tensor,), torch.Tensor):
         """
         Should have return format: (output, loss)
         where output is an arbitrary Tensor or tuple of Tensors,
         and loss is a scalar Tensor.
         """
-        raise NotImplementedError
+        pass
