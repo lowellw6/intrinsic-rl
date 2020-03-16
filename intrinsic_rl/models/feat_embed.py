@@ -15,6 +15,8 @@ class BaseFeatureExtractor(SelfSupervisedModule, ABC):
     Abstract base feature extraction class for mapping observations
     into feature embeddings. Inheriting classes must define the module
     ``self.extractor`` to produce this mapping.
+
+    All feature extractors are expected to produce (one or more) 1D feature vectors.
     """
 
     @abstractmethod
@@ -49,7 +51,8 @@ class IdentityFeatureExtractor(BaseFeatureExtractor):
 class ConvFeatureExtractor(BaseFeatureExtractor):
     """
     Maps images to feature embedding with convolutional front end
-    which is randomly initialized.
+    which is randomly initialized. Note this enforces use of fully
+    connected layers at the tail to conform to a 1D feature vector.
     """
 
     def __init__(
