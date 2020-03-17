@@ -1,6 +1,7 @@
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.parallel import DistributedDataParallelCPU as DDPC
+from abc import ABC
 
 from rlpyt.agents.base import BaseAgent
 from rlpyt.distributions.categorical import Categorical
@@ -9,9 +10,10 @@ from rlpyt.utils.logging import logger
 from rlpyt.utils.buffer import buffer_to
 
 from intrinsic_rl.models.base import SelfSupervisedModule
+from intrinsic_rl.util import trimSeq
 
 
-class IntrinsicBonusAgent(BaseAgent):
+class IntrinsicBonusAgent(BaseAgent, ABC):
     """
     Augments agents with a second model which generates some intrinsic bonus.
 
@@ -34,15 +36,16 @@ class IntrinsicBonusAgent(BaseAgent):
         if self.bonus_model_kwargs is None:
             self.bonus_model_kwargs = dict()
 
-    def bonus_call(self, observation, prev_action, prev_reward, prev_observation=None):
+    def bonus_call(self, *bonus_model_inputs):
         """
         Analogous ``__call__`` function for the intrinsic bonus model, running a forward pass through it.
         The bonus model is expected to return a tuple of the intrinsic reward and bonus loss, where the latter
         is a scalar Tensor containing the self-supervised loss of the bonus model (see ``SelfSupervisedModule``).
+
+        Order of ``bonus_model_inputs`` args much match that given to the bonus model itself. Expects any
+        action inputs have already been appropriately formatted for the model using ``format_actions``.
         """
-        if issubclass(type(self.distribution), Categorical):
-            prev_action = self.distribution.to_onehot(prev_action)
-        bonus_model_inputs = buffer_to((observation, prev_action, prev_reward, prev_observation), device=self.device)
+        bonus_model_inputs = buffer_to(bonus_model_inputs, device=self.device)
         int_rew, bonus_loss = self.bonus_model(*bonus_model_inputs)
         return buffer_to((int_rew, bonus_loss), device="cpu")
 
@@ -61,9 +64,27 @@ class IntrinsicBonusAgent(BaseAgent):
         :param share_memory: whether to use shared memory for bonus_model parameters.
         """
         super().initialize(env_spaces, share_memory=share_memory, **kwargs)
-        self.bonus_model = self.BonusModelCls(**self.env_model_kwargs, **self.bonus_model_kwargs)
+        self.add_env_to_bonus_kwargs()
+        self.bonus_model = self.BonusModelCls(**self.bonus_model_kwargs)
         if self.initial_bonus_model_state_dict is not None:
             self.bonus_model.load_state_dict(self.inital_bonus_model_state_dict)
+
+    def add_env_to_bonus_kwargs(self):
+        """
+        Augment bonus model kwargs with env kwargs, if necessary.
+        Defaults to no-op.
+        """
+        pass
+
+    def format_actions(self, *action_inputs):
+        """Formats actions to one-hot if env has Categorical action-space."""
+        if issubclass(type(self.distribution), Categorical):
+            formatted_actions = []
+            for tensor in action_inputs:
+                formatted_actions.append(self.distribution.to_onehot(tensor))
+            return trimSeq(tuple(formatted_actions))
+        else:
+            return trimSeq(action_inputs)
 
     def to_device(self, cuda_idx=None):
         """
