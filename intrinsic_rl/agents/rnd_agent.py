@@ -18,7 +18,7 @@ class RndAtariFfAgent(IntrinsicBonusAgent, AtariFfAgent):
     """
 
     def __init__(self, rnd_model_kwargs, **kwargs):
-        if "image_shape" in rnd_model_kwargs:  #
+        if "image_shape" in rnd_model_kwargs:
             raise AttributeError("Param ``image_shape`` automatically determined from environment; "
                                  "specify all RND network params except ``image_shape``.")
         bonus_model_kwargs = dict(RndCls=ConvFeatureExtractor, rnd_model_kwargs=rnd_model_kwargs)
