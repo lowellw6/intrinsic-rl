@@ -43,7 +43,7 @@ class IntrinsicCuriosityModule(SelfSupervisedModule):
         """
         features, feat_extract_loss = self.feat_extractor(obs, next_obs)
         obs_feat, next_obs_feat = features
-        fwd_out, fwd_dyn_loss = self.fwd_dyn_module(obs_feat, action.detach(), next_obs_feat)
+        fwd_out, fwd_dyn_loss = self.fwd_dyn_module(obs_feat.detach(), action.detach(), next_obs_feat.detach())
         icm_loss = (self.feat_loss_coeff * feat_extract_loss) + (self.forward_loss_coeff * fwd_dyn_loss)
         # Don't care about prediction itself from FDM class; just take the bonuses and loss
         _, fwd_bonus = fwd_out
