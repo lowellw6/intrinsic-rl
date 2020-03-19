@@ -1,6 +1,6 @@
 
-from intrinsic_rl.models.base import SelfSupervisedModule
-from intrinsic_rl.models.feat_embed import BaseFeatureExtractor, IdentityFeatureExtractor
+from intrinsic_rl.models.bonus.base import SelfSupervisedModule
+from intrinsic_rl.models.bonus.feat_embed import BaseFeatureExtractor, IdentityFeatureExtractor
 
 
 class IntrinsicCuriosityModule(SelfSupervisedModule):

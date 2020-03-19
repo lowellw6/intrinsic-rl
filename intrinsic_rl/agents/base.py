@@ -9,7 +9,7 @@ from rlpyt.utils.quick_args import save__init__args
 from rlpyt.utils.logging import logger
 from rlpyt.utils.buffer import buffer_to
 
-from intrinsic_rl.models.base import SelfSupervisedModule
+from intrinsic_rl.models.bonus.base import SelfSupervisedModule
 from intrinsic_rl.util import trimSeq
 
 

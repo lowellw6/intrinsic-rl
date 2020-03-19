@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from rlpyt.models.conv2d import Conv2dHeadModel
 from rlpyt.models.mlp import MlpModel
 
-from intrinsic_rl.models.base import SelfSupervisedModule
+from intrinsic_rl.models.bonus.base import SelfSupervisedModule
 from intrinsic_rl.models.submodules import Conv2dHeadModelFlex
 from intrinsic_rl.util import trimSeq
 
@@ -57,7 +57,7 @@ class ConvFeatureExtractor(BaseFeatureExtractor):
 
     def __init__(
             self,
-            image_shape=None,
+            input_shape=None,
             channels=None,
             kernel_sizes=None,
             strides=None,
@@ -80,9 +80,9 @@ class ConvFeatureExtractor(BaseFeatureExtractor):
                     return
             raise AttributeError("Base policy / q-network does not contain a convolutional head model to share")
         else:
-            assert None not in (image_shape, channels, kernel_sizes, strides, hidden_sizes)
+            assert None not in (input_shape, channels, kernel_sizes, strides, hidden_sizes)
             self.extractor = Conv2dHeadModelFlex(
-                image_shape=image_shape,
+                image_shape=input_shape,
                 channels=channels,
                 kernel_sizes=kernel_sizes,
                 strides=strides,
@@ -105,14 +105,14 @@ class MlpFeatureExtractor(BaseFeatureExtractor):
 
     def __init__(
             self,
-            input_size,
+            input_shape,  # Must be 1D
             hidden_sizes,
             output_size=None,
             nonlinearity=torch.nn.Identity
             ):
         """Instantiate MLP feature extractor. Does not support parameter sharing with base network."""
         super().__init__()
-        self.extractor = MlpModel(input_size, hidden_sizes, output_size, nonlinearity)
+        self.extractor = MlpModel(input_shape, hidden_sizes, output_size, nonlinearity)
 
 
 class InverseDynamicsFeatureExtractor(SelfSupervisedModule):  # TODO

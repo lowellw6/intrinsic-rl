@@ -1,7 +1,7 @@
 
 import torch
 
-from intrinsic_rl.models.base import SelfSupervisedModule
+from intrinsic_rl.models.bonus.base import SelfSupervisedModule
 from intrinsic_rl.models.submodules import ResidualBlock
 
 
