@@ -1,7 +1,7 @@
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.parallel import DistributedDataParallelCPU as DDPC
-from abc import ABC
+from abc import ABC, abstractmethod
 
 from rlpyt.agents.base import BaseAgent
 from rlpyt.distributions.categorical import Categorical
@@ -35,6 +35,11 @@ class IntrinsicBonusAgent(BaseAgent, ABC):
         self.shared_bonus_model = None
         if self.bonus_model_kwargs is None:
             self.bonus_model_kwargs = dict()
+
+    @abstractmethod
+    def extract_bonus_inputs(self, *args, **kwargs):
+        """Should extract and format all necessary inputs to the bonus model."""
+        pass
 
     def bonus_call(self, *bonus_model_inputs):
         """

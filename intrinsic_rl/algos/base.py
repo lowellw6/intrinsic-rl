@@ -1,5 +1,5 @@
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from rlpyt.algos.base import RlAlgorithm
 
@@ -10,7 +10,4 @@ class IntrinsicRlAlgorithm(RlAlgorithm, ABC):
     with intrinsic bonus model.
     """
 
-    @abstractmethod
-    def extract_bonus_inputs(self, *args, **kwargs):
-        """Should extract and format all necessary inputs to the bonus model."""
-        pass
+    pass

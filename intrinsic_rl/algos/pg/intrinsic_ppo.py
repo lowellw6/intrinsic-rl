@@ -4,6 +4,7 @@ from abc import ABC
 
 from rlpyt.algos.pg.base import OptInfo
 from rlpyt.algos.pg.ppo import PPO
+from rlpyt.agents.base import AgentInputs
 from rlpyt.utils.tensor import valid_mean
 from rlpyt.utils.quick_args import save__init__args
 from rlpyt.utils.buffer import buffer_to, buffer_method
@@ -12,9 +13,8 @@ from rlpyt.utils.collections import namedarraytuple
 
 from intrinsic_rl.algos.pg.base import IntrinsicPolicyGradientAlgo
 
-ActorInputs = namedarraytuple("ActorInputs", ["observation", "prev_action", "prev_reward"])
 LossInputs = namedarraytuple("LossInputs",
-    ["actor_inputs", "action", "int_bootstrap_val", "ext_return", "ext_adv", "valid", "old_dist_info"])
+    ["agent_inputs", "action", "ext_return", "ext_adv", "int_return", "int_adv", "valid", "old_dist_info"])
 
 
 class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
@@ -39,21 +39,39 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         Override to provide additional flexibility in what enters the combined_loss function.
         """
         recurrent = self.agent.recurrent
-        actor_inputs = ActorInputs(
+        agent_inputs = AgentInputs(
             observation=samples.env.observation,
             prev_action=samples.agent.prev_action,
             prev_reward=samples.env.prev_reward,
         )
-        actor_inputs = buffer_to(actor_inputs, device=self.agent.device)
+        agent_inputs = buffer_to(agent_inputs, device=self.agent.device)
         if hasattr(self.agent, "update_obs_rms"):
-            self.agent.update_obs_rms(actor_inputs.observation)
-        ext_return, ext_adv, valid = self.process_returns(samples)
+            self.agent.update_obs_rms(agent_inputs.observation)
+
+        # Process extrinsic returns and advantages
+        ext_return, ext_adv, valid = self.process_extrinsic_returns(samples)
+
+        # First call to bonus model, generates intrinsic rewards for samples batch
+        # [T, B] leading dims are flattened, and the resulting returns are unflattened
+        batch_shape = samples.env.observation.shape[:2]
+        bonus_model_inputs = self.agent.extract_bonus_inputs(
+            observation=samples.env.observation.flatten(end_dim=1),
+            action=samples.agent.action.flatten(end_dim=1)
+        )
+        int_rew, _ = self.agent.bonus_call(bonus_model_inputs)
+        int_rew = int_rew.view(batch_shape)
+
+        # Process intrinsic returns and advantages
+        int_return, int_adv = self.process_intrinsic_returns(int_rew, samples.agent.agent_info.int_value,
+                                                             samples.agent.int_bootstrap_value)
+
         loss_inputs = LossInputs(  # So can slice all.
-            actor_inputs=actor_inputs,
+            agent_inputs=agent_inputs,
             action=samples.agent.action,
-            int_bootstrap_val=samples.agent.int_bootstrap_value,  # Additional bootstrap val for intrinsic reward stream
             ext_return=ext_return,
             ext_adv=ext_adv,
+            int_return=int_return,
+            int_adv=int_adv,
             valid=valid,
             old_dist_info=samples.agent.agent_info.dist_info
         )
@@ -90,8 +108,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
 
         return opt_info
 
-    def combined_loss(self, agent_inputs, action, int_bootstrap_val, ext_return, ext_adv, valid, old_dist_info,
-            init_rnn_state=None):
+    def combined_loss(self, agent_inputs, action, ext_return, ext_adv, int_return, int_adv,
+                      valid, old_dist_info, init_rnn_state=None):
         """
         Alternative to ``loss`` in PPO.
         This functions runs ``bonus_call``, performing a forward pass of the intrinsic bonus model
@@ -107,13 +125,16 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             dist_info, ext_value, int_value = self.agent(*agent_inputs)
         dist = self.agent.distribution
 
-        # Extract bonus model inputs and call bonus model, generating intrinsic rewards
-        bonus_model_inputs = self.extract_bonus_inputs(agent_inputs, action)
-        int_rew, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
+        # Second call to bonus model, generates self-supervised bonus model loss
+        # Leading batch dims have already been flattened after entering minibatch
+        bonus_model_inputs = self.agent.extract_bonus_inputs(
+            observation=agent_inputs.observation,
+            action=action
+        )
+        _, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
         bonus_loss *= self.bonus_loss_coeff
 
-        # Process intrinsic reward stream, and produce combined advantages
-        int_return, int_adv = self.process_intrinsic_returns(int_rew, int_value.detach(), int_bootstrap_val)
+        # Fuse reward streams by producing combined advantages
         advantage = self.ext_rew_coeff * ext_adv + self.int_rew_coeff * int_adv
 
         # Construct PPO loss

@@ -35,12 +35,13 @@ class RndBonusModule(SelfSupervisedModule):
         https://arxiv.org/abs/1810.12894. This is necessary since the target
         network is fixed and cannot adjust to varying environments.
 
-        If observations are already normalized this operation
-        is redundant, but it shouldn't affect performance.
+        WARNING: If observations are already normalized using
+        a different model / formulation, this can cause issues
+        if this model is initialized in the sampler.
         """
-        obs = (obs - self.obs_norm_model.mean) / self.obs_norm_model.var.sqrt()
+        self.obs_norm_model.update(obs.to(dtype=torch.float32))
+        obs = (obs - self.obs_norm_model.mean) / (self.obs_norm_model.var.sqrt() + 1e-8)
         obs = torch.clamp(obs, min=-5, max=5)
-        self.obs_norm_model.update(obs)
         return obs
 
     def forward(self, obs):
