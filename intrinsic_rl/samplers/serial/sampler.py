@@ -90,6 +90,7 @@ class IntrinsicSerialSampler(SerialSampler):
         logger.log("Serial Sampler initialized.")
         return examples
 
+    @torch.no_grad()
     def init_obs_norm(self, agent):
         """
         Initializes observation normalization parameters in intrinsic bonus model.
