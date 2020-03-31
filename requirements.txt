@@ -1,0 +1,32 @@
+atari-py==0.2.6
+Click==7.0
+cloudpickle==1.2.2
+cycler==0.10.0
+Flask==1.0.2
+future==0.18.2
+-e git+https://github.com/openai/gym.git@8e5a7ca3e6b4c88100a9550910dfb1a6ed8c5277#egg=gym
+-e git+https://github.com/maximecb/gym-minigrid.git@a5f4ef3684875eba613087dcef21be57c186bdc8#egg=gym_minigrid
+-e git+https://github.com/lowellw6/intrinsic-rl.git@f6d67284edca7fdf934f5d973a120a2bcce1fac5#egg=intrinsic_rl
+itsdangerous==1.1.0
+Jinja2==2.11.1
+kiwisolver==1.1.0
+MarkupSafe==1.1.1
+matplotlib==2.0.2
+numpy==1.16.0
+opencv-python==4.2.0.32
+Pillow==7.0.0
+plotly==4.0.0
+psutil==5.7.0
+pyglet==1.3.2
+pyparsing==2.4.6
+PyPrind==2.11.2
+python-dateutil==2.8.1
+pytz==2019.3
+retrying==1.3.3
+-e git+https://github.com/astooke/rlpyt.git@7b0550e6b2fd10f89c84d93a309bcba1d0007221#egg=rlpyt
+scipy==1.4.1
+six==1.14.0
+torch==1.4.0+cpu
+torchvision==0.5.0+cpu
+-e git+https://github.com/vitchyr/viskit.git@a0384d69cfdcde8d08646638ce94a13bf1af44d6#egg=viskit
+Werkzeug==1.0.0
