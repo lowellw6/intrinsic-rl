@@ -43,7 +43,8 @@ class RndBonusModule(SelfSupervisedModule):
         a different model / formulation, this will cause issues
         if this model is initialized on raw obs in the sampler.
         """
-        self.obs_rms.update(obs.to(dtype=torch.float32))  # Obs may be byte tensor (e.g. 8-bit pixels)
+        obs = obs.to(dtype=torch.float32)  # Obs may be byte tensor (e.g. 8-bit pixels)
+        self.obs_rms.update(obs)  
         obs = (obs - self.obs_rms.mean) / (self.obs_rms.var.sqrt() + 1e-8)
         obs = torch.clamp(obs, min=-5, max=5)
         return obs
