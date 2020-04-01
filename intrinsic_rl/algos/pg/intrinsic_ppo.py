@@ -30,6 +30,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
                  ext_rew_coeff=0.,
                  bonus_loss_coeff=1.,
                  entropy_loss_coeff=0.,  # Default is to discard policy entropy
+                 ext_rew_clip=None,   # Clip range for extrinsic rewards as tuple (min, max)
                  **kwargs):
         save__init__args(locals())
         super().__init__(entropy_loss_coeff=entropy_loss_coeff, **kwargs)
@@ -49,7 +50,13 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             self.agent.update_obs_rms(agent_inputs.observation)
 
         # Process extrinsic returns and advantages
-        ext_return, ext_adv, valid = self.process_extrinsic_returns(samples)
+        ext_rew, done, ext_val, ext_bv = (samples.env.reward, samples.env.done,
+                                          samples.agent.agent_info.ext_value, samples.agent.bootstrap_value)
+        done = done.type(ext_rew.dtype)
+        if self.ext_rew_clip:  # Clip extrinsic reward is specified
+            rew_min, rew_max = self.ext_rew_clip
+            ext_rew = ext_rew.clamp(rew_min, rew_max)
+        ext_return, ext_adv, valid = self.process_extrinsic_returns(ext_rew, done, ext_val, ext_bv)
 
         # First call to bonus model, generates intrinsic rewards for samples batch
         # [T, B] leading dims are flattened, and the resulting returns are unflattened

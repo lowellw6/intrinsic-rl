@@ -18,22 +18,19 @@ class IntrinsicPolicyGradientAlgo(PolicyGradientAlgo, IntrinsicRlAlgorithm, ABC)
         raise Exception("Method split into extrinsic and intrinsic components, "
                         "see IntrinsicPolicyGradientAlgo class definition.")
 
-    def process_extrinsic_returns(self, samples):
+    def process_extrinsic_returns(self, ext_rew, done, ext_val, ext_bootstrap_value):
         """
-        Identical to ``process_returns`` but calls renamed ``ext_value`` in
-        agent buffer (was named ``value``). This was renamed since there
-        is now an ``int_value`` corresponding to the intrinsic value head.
+        Identical to ``process_returns`` but expects samples have been extracted
+        for parameters, as some buffer names changed (e.g. value to ext_value).
+        Also provides greater flexibility, for example in reward clipping before
+        entering this function.
         """
-        reward, done, value, bv = (samples.env.reward, samples.env.done,
-            samples.agent.agent_info.ext_value, samples.agent.bootstrap_value)  # Rename edit here
-        done = done.type(reward.dtype)
-
         if self.gae_lambda == 1:  # GAE reduces to empirical discounted.
-            return_ = discount_return(reward, done, bv, self.discount)
-            advantage = return_ - value
+            return_ = discount_return(ext_rew, done, ext_bootstrap_value, self.discount)
+            advantage = return_ - ext_val
         else:
             advantage, return_ = generalized_advantage_estimation(
-                reward, value, done, bv, self.discount, self.gae_lambda)
+                ext_rew, ext_val, done, ext_bootstrap_value, self.discount, self.gae_lambda)
 
         if not self.mid_batch_reset or self.agent.recurrent:
             valid = valid_from_done(done)  # Recurrent: no reset during training.
@@ -52,21 +49,21 @@ class IntrinsicPolicyGradientAlgo(PolicyGradientAlgo, IntrinsicRlAlgorithm, ABC)
 
         return return_, advantage, valid
 
-    def process_intrinsic_returns(self, int_rew, value, bootstrap_value):
+    def process_intrinsic_returns(self, int_rew, int_val, int_bootstrap_value):
         """
         Same as ``process_returns`` but discounted reward signal is carried over episodes.
-        Note that value and bootstrap_value should come from separate critic model than that
+        Note that int_val and int_bootstrap_value should come from separate critic model than that
         used for extrinsic rewards to keep these reward streams distinct.
         For more details, see https://arxiv.org/abs/1810.12894.
         """
         faux_done = torch.zeros_like(int_rew)  # Faux done signals, all "not done"
 
         if self.gae_lambda == 1:  # GAE reduces to empirical discounted.
-            return_ = discount_return(int_rew, faux_done, bootstrap_value, self.int_discount)
-            advantage = return_ - value
+            return_ = discount_return(int_rew, faux_done, int_bootstrap_value, self.int_discount)
+            advantage = return_ - int_val
         else:
             advantage, return_ = generalized_advantage_estimation(
-                int_rew, value, faux_done, bootstrap_value, self.int_discount, self.gae_lambda)
+                int_rew, int_val, faux_done, int_bootstrap_value, self.int_discount, self.gae_lambda)
 
         if self.normalize_advantage:
             adv_mean = advantage.mean()
