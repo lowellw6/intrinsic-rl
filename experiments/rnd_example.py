@@ -8,6 +8,7 @@ from rlpyt.agents.pg.atari import AtariFfAgent
 from rlpyt.runners.minibatch_rl import MinibatchRl
 from rlpyt.utils.logging.context import logger_context
 from rlpyt.utils.launching.affinity import make_affinity
+from rlpyt.utils.logging.logger import set_snapshot_gap
 
 from intrinsic_rl.samplers.serial.sampler import IntrinsicSerialSampler
 from intrinsic_rl.samplers.parallel.gpu.sampler import IntrinsicGpuSampler
@@ -25,43 +26,62 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
         Sampler = IntrinsicGpuSampler
         print(f"Using GPU parallel sampler (agent in master), {gpu_cpu} for sampling and optimizing.")
 
+    env_kwargs = dict(game=game, repeat_action_probability=0.25, horizon=int(18e3))
+
     sampler = Sampler(
         EnvCls=AtariEnv,
         TrajInfoCls=AtariTrajInfo,  # default traj info + GameScore
-        env_kwargs=dict(game=game),
-        eval_env_kwargs=dict(game=game),
-        batch_T=16,
-        batch_B=8,
+        env_kwargs=env_kwargs,
+        batch_T=128,
+        batch_B=128,
         obs_norm_steps=128*50,
         max_decorrelation_steps=0,
-        eval_n_envs=10,
-        eval_max_steps=int(10e3),
-        eval_max_trajectories=5,
     )
 
-    algo = IntrinsicPPO(int_rew_coeff=1., ext_rew_coeff=0.)
+    algo = IntrinsicPPO(
+        int_rew_coeff=1.,
+        ext_rew_coeff=0.,
+        ext_rew_clip=(-1, 1),
+        minibatches=4,
+        epochs=4,
+        entropy_loss_coeff=0.001,
+        learning_rate=0.0001,
+        gae_lambda=0.95,
+        discount=0.999,
+        int_discount=0.99
+    )
 
     rnd_model_kwargs = dict(
         channels=[32, 64, 64],
-        kernel_sizes=[8, 4, 3],
+        kernel_sizes=[8, 4, 4],
         strides=[(4, 4), (2, 2), (1, 1)],
         hidden_sizes=[512],
-        conv_nonlinearity=torch.nn.LeakyReLU)
-    agent = RndAtariFfAgent(rnd_model_kwargs=rnd_model_kwargs)
+        conv_nonlinearity=torch.nn.ReLU)
+    base_model_kwargs = dict(  # Same front-end architecture as RND model, different fc kwarg name
+        channels=[32, 64, 64],
+        kernel_sizes=[8, 4, 4],
+        strides=[(4, 4), (2, 2), (1, 1)],
+        paddings=[0, 0, 0],
+        fc_sizes=[512]
+        # Automatically applies nonlinearity=torch.nn.ReLU in this case,
+        # but can't specify due to rlpyt limitations
+    )
+    agent = RndAtariFfAgent(rnd_model_kwargs=rnd_model_kwargs, model_kwargs=base_model_kwargs)
 
     runner = MinibatchRl(
         algo=algo,
         agent=agent,
         sampler=sampler,
-        n_steps=int(50e6),
-        log_interval_steps=int(1e2),
+        n_steps=int(49152e4),  # this is 30k rollouts per environment at (T, B) = (128, 128)
+        log_interval_steps=int(1e3),
         affinity=affinity
     )
 
     config = dict(game=game)
-    name = "breakout_" + game
-    log_dir = "rnd_example"
-    with logger_context(log_dir, run_ID, name, config, snapshot_mode="last"):
+    name = "intrinsicPPO_" + game
+    log_dir = "rnd_pure_exploration"
+    set_snapshot_gap(1000)  # Save parameter checkpoint every 1000 training iterations
+    with logger_context(log_dir, run_ID, name, config, snapshot_mode="gap"):
         runner.train()
 
 
