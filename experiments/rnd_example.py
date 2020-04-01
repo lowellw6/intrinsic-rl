@@ -33,7 +33,7 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
         TrajInfoCls=AtariTrajInfo,  # default traj info + GameScore
         env_kwargs=env_kwargs,
         batch_T=128,
-        batch_B=128,
+        batch_B=64,
         obs_norm_steps=128*50,
         max_decorrelation_steps=0,
     )
