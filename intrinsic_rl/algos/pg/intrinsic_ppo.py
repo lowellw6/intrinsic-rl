@@ -16,6 +16,7 @@ LossInputs = namedarraytuple("LossInputs",
     ["agent_inputs", "action", "ext_return", "ext_adv", "int_return", "int_adv", "valid", "old_dist_info"])
 OptInfo = namedarraytuple("OptInfo",
     ["loss", "policyLoss", "valueLoss", "entropyLoss", "bonusLoss",
+     "extrinsicValue", "intrinsicValue",
      "intrinsicReward", "discountedIntrinsicReturn",
      "gradNorm", "entropy", "perplexity"])
 
@@ -75,8 +76,15 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         int_rew = int_rew.view(batch_shape)
 
         # Process intrinsic returns and advantages
-        int_return, int_adv = self.process_intrinsic_returns(int_rew, samples.agent.agent_info.int_value,
-                                                             samples.agent.int_bootstrap_value)
+        int_val, int_bv = samples.agent.agent_info.int_value, samples.agent.int_bootstrap_value
+        int_return, int_adv = self.process_intrinsic_returns(int_rew, int_val, int_bv)
+
+        # Add front-processed optimizer data to logging buffer
+        # Flattened to match elsewhere, though the ultimate statistics summarize over all dims anyway
+        opt_info.extrinsicValue.extend(ext_val.flatten().tolist())
+        opt_info.intrinsicValue.extend(int_val.flatten().tolist())
+        opt_info.intrinsicReward.extend(int_rew.flatten().tolist())
+        opt_info.discountedIntrinsicReturn.extend(int_return.flatten().tolist())
 
         loss_inputs = LossInputs(  # So can slice all.
             agent_inputs=agent_inputs,
@@ -103,7 +111,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
                 rnn_state = init_rnn_state[B_idxs] if recurrent else None
                 # NOTE: if not recurrent, will lose leading T dim, should be OK.
                 # Combined loss produces single loss for both actor and bonus model
-                loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss, mb_int_rew, mb_int_return = \
+                loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss = \
                     self.combined_loss(*loss_inputs[T_idxs, B_idxs], rnn_state)
                 loss.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -115,8 +123,6 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
                 opt_info.valueLoss.append(value_loss.item())
                 opt_info.entropyLoss.append(entropy_loss.item())
                 opt_info.bonusLoss.append(bonus_loss.item())
-                opt_info.intrinsicReward.append(mb_int_rew.mean().item())
-                opt_info.discountedIntrinsicReturn.append(mb_int_return.mean().item())
                 opt_info.gradNorm.append(grad_norm)
                 opt_info.entropy.append(entropy.item())
                 opt_info.perplexity.append(perplexity.item())
@@ -150,7 +156,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             observation=agent_inputs.observation,
             action=action
         )
-        int_rew, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
+        _, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
         bonus_loss *= self.bonus_loss_coeff
 
         # Fuse reward streams by producing combined advantages
@@ -175,4 +181,4 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         loss = pi_loss + value_loss + entropy_loss + bonus_loss
 
         perplexity = dist.mean_perplexity(dist_info, valid)
-        return loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss, int_rew, int_return
+        return loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss
