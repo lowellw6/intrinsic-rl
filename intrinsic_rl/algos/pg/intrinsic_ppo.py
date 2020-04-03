@@ -2,7 +2,6 @@
 import torch
 from abc import ABC
 
-from rlpyt.algos.pg.base import OptInfo
 from rlpyt.algos.pg.ppo import PPO
 from rlpyt.agents.base import AgentInputs
 from rlpyt.utils.tensor import valid_mean
@@ -15,6 +14,10 @@ from intrinsic_rl.algos.pg.base import IntrinsicPolicyGradientAlgo
 
 LossInputs = namedarraytuple("LossInputs",
     ["agent_inputs", "action", "ext_return", "ext_adv", "int_return", "int_adv", "valid", "old_dist_info"])
+OptInfo = namedarraytuple("OptInfo",
+    ["loss", "policyLoss", "valueLoss", "entropyLoss", "bonusLoss",
+     "intrinsicReward", "discountedIntrinsicReturn",
+     "gradNorm", "entropy", "perplexity"])
 
 
 class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
@@ -23,6 +26,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
     Must override abstract method ``extract_bonus_inputs`` based on
     specific intrinsic bonus model / algorithm to be used.
     """
+
+    opt_info_fields = tuple(f for f in OptInfo._fields)
 
     def __init__(self,
                  int_discount=0.99,  # Separate discount factor for intrinsic reward stream
@@ -39,6 +44,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         """
         Override to provide additional flexibility in what enters the combined_loss function.
         """
+        opt_info = OptInfo(*([] for _ in range(len(OptInfo._fields))))
         recurrent = self.agent.recurrent
         agent_inputs = AgentInputs(
             observation=samples.env.observation,
@@ -86,7 +92,6 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             # Leave in [B,N,H] for slicing to minibatches.
             init_rnn_state = samples.agent.agent_info.prev_rnn_state[0]  # T=0.
         T, B = samples.env.reward.shape[:2]
-        opt_info = OptInfo(*([] for _ in range(len(OptInfo._fields))))
         # If recurrent, use whole trajectories, only shuffle B; else shuffle all.
         batch_size = B if self.agent.recurrent else T * B
         mb_size = batch_size // self.minibatches
@@ -98,13 +103,20 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
                 rnn_state = init_rnn_state[B_idxs] if recurrent else None
                 # NOTE: if not recurrent, will lose leading T dim, should be OK.
                 # Combined loss produces single loss for both actor and bonus model
-                loss, entropy, perplexity = self.combined_loss(*loss_inputs[T_idxs, B_idxs], rnn_state)
+                loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss, mb_int_rew, mb_int_return = \
+                    self.combined_loss(*loss_inputs[T_idxs, B_idxs], rnn_state)
                 loss.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     self.agent.parameters(), self.clip_grad_norm)
                 self.optimizer.step()
 
                 opt_info.loss.append(loss.item())
+                opt_info.policyLoss.append(pi_loss.item())
+                opt_info.valueLoss.append(value_loss.item())
+                opt_info.entropyLoss.append(entropy_loss.item())
+                opt_info.bonusLoss.append(bonus_loss.item())
+                opt_info.intrinsicReward.append(mb_int_rew.mean().item())
+                opt_info.discountedIntrinsicReturn.append(mb_int_return.mean().item())
                 opt_info.gradNorm.append(grad_norm)
                 opt_info.entropy.append(entropy.item())
                 opt_info.perplexity.append(perplexity.item())
@@ -138,7 +150,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             observation=agent_inputs.observation,
             action=action
         )
-        _, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
+        int_rew, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
         bonus_loss *= self.bonus_loss_coeff
 
         # Fuse reward streams by producing combined advantages
@@ -163,4 +175,4 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         loss = pi_loss + value_loss + entropy_loss + bonus_loss
 
         perplexity = dist.mean_perplexity(dist_info, valid)
-        return loss, entropy, perplexity
+        return loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss, int_rew, int_return
