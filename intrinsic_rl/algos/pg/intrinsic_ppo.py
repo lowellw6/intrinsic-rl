@@ -13,7 +13,7 @@ from rlpyt.utils.collections import namedarraytuple
 from intrinsic_rl.algos.pg.base import IntrinsicPolicyGradientAlgo
 
 LossInputs = namedarraytuple("LossInputs",
-    ["agent_inputs", "action", "ext_return", "ext_adv", "int_return", "int_adv", "valid", "old_dist_info"])
+    ["agent_inputs", "action", "next_obs", "ext_return", "ext_adv", "int_return", "int_adv", "valid", "old_dist_info"])
 OptInfo = namedarraytuple("OptInfo",
     ["loss", "policyLoss", "valueLoss", "entropyLoss", "bonusLoss",
      "extrinsicValue", "intrinsicValue",
@@ -65,11 +65,17 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             ext_rew = ext_rew.clamp(rew_min, rew_max)
         ext_return, ext_adv, valid = self.process_extrinsic_returns(ext_rew, done, ext_val, ext_bv)
 
+        # Gather next observations, or fill with dummy placeholder (current obs)
+        # Note the agent decides what it extracts and uses as input to its model,
+        # so the dummy tensor scenario will have no effect
+        next_obs = samples.env.next_observation if "next_observation" in samples.env else samples.env.observation
+
         # First call to bonus model, generates intrinsic rewards for samples batch
         # [T, B] leading dims are flattened, and the resulting returns are unflattened
         batch_shape = samples.env.observation.shape[:2]
         bonus_model_inputs = self.agent.extract_bonus_inputs(
             observation=samples.env.observation.flatten(end_dim=1),
+            next_observation=next_obs.flatten(end_dim=1),  # May be same as observation (dummy placeholder) if algo set next_obs=False
             action=samples.agent.action.flatten(end_dim=1)
         )
         int_rew, _ = self.agent.bonus_call(bonus_model_inputs)
@@ -89,6 +95,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         loss_inputs = LossInputs(  # So can slice all.
             agent_inputs=agent_inputs,
             action=samples.agent.action,
+            next_obs=next_obs,
             ext_return=ext_return,
             ext_adv=ext_adv,
             int_return=int_return,
@@ -99,8 +106,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         if recurrent:
             # Leave in [B,N,H] for slicing to minibatches.
             init_rnn_state = samples.agent.agent_info.prev_rnn_state[0]  # T=0.
-        T, B = samples.env.reward.shape[:2]
         # If recurrent, use whole trajectories, only shuffle B; else shuffle all.
+        T, B = samples.env.reward.shape[:2]
         batch_size = B if self.agent.recurrent else T * B
         mb_size = batch_size // self.minibatches
         for _ in range(self.epochs):
@@ -133,7 +140,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
 
         return opt_info
 
-    def combined_loss(self, agent_inputs, action, ext_return, ext_adv, int_return, int_adv,
+    def combined_loss(self, agent_inputs, action, next_obs, ext_return, ext_adv, int_return, int_adv,
                       valid, old_dist_info, init_rnn_state=None):
         """
         Alternative to ``loss`` in PPO.
@@ -154,6 +161,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         # Leading batch dims have already been flattened after entering minibatch
         bonus_model_inputs = self.agent.extract_bonus_inputs(
             observation=agent_inputs.observation,
+            next_observation=next_obs,  # May be same as observation (dummy placeholder) if algo set next_obs=False
             action=action
         )
         _, bonus_loss = self.agent.bonus_call(bonus_model_inputs)

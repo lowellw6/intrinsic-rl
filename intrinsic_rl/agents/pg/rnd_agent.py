@@ -26,9 +26,15 @@ class RndAtariFfAgent(IntrinsicPolicyGradientAgent, AtariFfAgent):
         super().__init__(BonusModelCls=RndBonusModule, bonus_model_kwargs=bonus_model_kwargs,
                          ModelCls=ModelCls, **kwargs)
 
-    def extract_bonus_inputs(self, observation, **kwargs):
-        return observation
+    def extract_bonus_inputs(self, next_observation, **kwargs):
+        """Extracts and returns batched last frames within frame-stack."""
+        next_observation = next_observation[:, -1].unsqueeze(dim=1)
+        return next_observation
 
     def add_env_to_bonus_kwargs(self):
-        """Adds input_shape and output_size to rnd_model_kwargs, taken from environment info."""
-        self.bonus_model_kwargs["rnd_model_kwargs"]["input_shape"] = self.env_model_kwargs["image_shape"]
+        """
+        Adds input_shape and output_size to rnd_model_kwargs, taken from environment info.
+        Frame-stack dimension becomes singular as RND model only uses last frame.
+        """
+        rnd_input_shape = tuple([1] + list(self.env_model_kwargs["image_shape"][1:]))  # (1, H, W)
+        self.bonus_model_kwargs["rnd_model_kwargs"]["input_shape"] = rnd_input_shape

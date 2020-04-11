@@ -7,12 +7,16 @@ from rlpyt.utils.synchronize import drain_queue
 from rlpyt.utils.logging import logger
 
 from intrinsic_rl.samplers.parallel.base import IntrinsicParallelSamplerBase
+from intrinsic_rl.samplers.parallel.gpu.collectors import IntrinsicGpuResetCollector
 from intrinsic_rl.samplers.parallel.gpu.action_server import IntrinsicActionServer
 
 
 class IntrinsicGpuSamplerBase(GpuSamplerBase, IntrinsicParallelSamplerBase):
     """GpuSamplerBase which provides routines for initializing observation normalization models."""
     gpu = True
+
+    def __init__(self, *args, CollectorCls=IntrinsicGpuResetCollector, **kwargs):
+        super().__init__(*args, CollectorCls=CollectorCls, **kwargs)
 
     @torch.no_grad()
     def init_obs_norm(self):
@@ -49,8 +53,13 @@ class IntrinsicGpuSamplerBase(GpuSamplerBase, IntrinsicParallelSamplerBase):
                     step_np.action[b_reset] = 0  # Null prev_action into agent.
                     step_np.reward[b_reset] = 0  # Null prev_reward into agent.
 
+            # Prepare observation, flattening channel dim (frame-stack) into batch dim for image input
+            observation = agent_inputs.observation
+            if len(observation.shape) == 4:  # (B, C, H, W)
+                observation = observation.view((-1, 1, *observation.shape[2:]))
+
             # exercise observation normalization model
-            self.agent.bonus_model.normalize_obs(agent_inputs.observation)
+            self.agent.bonus_model.normalize_obs(observation)
 
             # get random actions for workers
             action = np.empty_like(step_np.action)

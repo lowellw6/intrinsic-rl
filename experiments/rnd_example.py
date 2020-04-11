@@ -1,18 +1,14 @@
 
 import torch
 
-from rlpyt.samplers.serial.sampler import SerialSampler
 from rlpyt.envs.atari.atari_env import AtariEnv, AtariTrajInfo
-from rlpyt.algos.pg.ppo import PPO
-from rlpyt.agents.pg.atari import AtariFfAgent
-from rlpyt.runners.minibatch_rl import MinibatchRl
 from rlpyt.utils.logging.context import logger_context
-from rlpyt.utils.launching.affinity import make_affinity
 from rlpyt.utils.logging.logger import set_snapshot_gap
 
+from intrinsic_rl.runners.minibatch_rl import MinibatchRlFlex
 from intrinsic_rl.samplers.serial.sampler import IntrinsicSerialSampler
 from intrinsic_rl.samplers.parallel.gpu.sampler import IntrinsicGpuSampler
-from intrinsic_rl.algos.pg.intrinsic_ppo import IntrinsicPPO
+from intrinsic_rl.algos.pg.rnd_algo import RndIntrinsicPPO
 from intrinsic_rl.agents.pg.rnd_agent import RndAtariFfAgent
 
 
@@ -35,10 +31,10 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
         batch_T=128,
         batch_B=64,
         obs_norm_steps=128*50,
-        max_decorrelation_steps=0,
+        max_decorrelation_steps=0
     )
 
-    algo = IntrinsicPPO(
+    algo = RndIntrinsicPPO(
         int_rew_coeff=1.,
         ext_rew_coeff=0.,
         ext_rew_clip=(-1, 1),
@@ -68,7 +64,7 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
     )
     agent = RndAtariFfAgent(rnd_model_kwargs=rnd_model_kwargs, model_kwargs=base_model_kwargs)
 
-    runner = MinibatchRl(
+    runner = MinibatchRlFlex(
         algo=algo,
         agent=agent,
         sampler=sampler,

@@ -46,6 +46,8 @@ class IntrinsicCpuResetCollector(CpuResetCollector):
             env_buf.reward[t] = reward
             if agent_info:
                 agent_buf.agent_info[t] = agent_info
+            if "next_observation" in env_buf:  # Modified to include next_obs
+                env_buf.next_observation[t] = observation
 
         # Modified to include int_bootstrap_value
         if "bootstrap_value" in agent_buf:

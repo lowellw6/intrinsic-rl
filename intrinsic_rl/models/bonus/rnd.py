@@ -65,15 +65,15 @@ class RndBonusModule(SelfSupervisedModule):
         int_rew /= self.int_rew_rms.var.sqrt()
         return int_rew.squeeze()
 
-    def forward(self, obs):
+    def forward(self, next_obs):
         """
         Runs forward pass for distillation and target models, producing intrinsic
         bonuses and distillation model loss. Note the self-supervised losses of
         the models are unused (and are presumably placeholders with a value of zero).
         """
-        obs = self.normalize_obs(obs)
-        distill_feat, _ = self.distill_model(obs)
-        target_feat, _ = self.target_model(obs)
+        next_obs = self.normalize_obs(next_obs)
+        distill_feat, _ = self.distill_model(next_obs)
+        target_feat, _ = self.target_model(next_obs)
         pred_errors = torch.mean((distill_feat - target_feat.detach()) ** 2, dim=-1)  # Maintains batch dimension
         distill_loss = torch.mean(pred_errors)  # Reduces batch dimension
         int_rew = self.normalize_int_rew(pred_errors.detach())

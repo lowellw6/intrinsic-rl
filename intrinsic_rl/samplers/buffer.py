@@ -8,13 +8,19 @@ from rlpyt.samplers.collections import Samples, AgentSamples, EnvSamples
 
 IntAgentSamplesBsv = namedarraytuple("IntAgentSamplesBsv",
                                      ["action", "prev_action", "agent_info", "bootstrap_value", "int_bootstrap_value"])
+# EnvSamplesPlus adds next_observation to EnvSamples
+EnvSamplesPlus = namedarraytuple("EnvSamplesPlus",
+                                 ["observation", "next_observation", "reward", "prev_reward", "done", "env_info"])
 
 
-def build_intrinsic_samples_buffer(agent, env, batch_spec, bootstrap_value=False,
+def build_intrinsic_samples_buffer(agent, env, batch_spec, bootstrap_value=False, next_obs=False,
                                    agent_shared=True, env_shared=True, subprocess=True, examples=None):
     """
     Replaces ``build_samples_buffer`` to add additional buffer space for intrinsic bonus agents.
     If bootstrap_value=True, also adds space for int_bootstrap_value from intrinsic value head.
+    If next_obs=True, also adds space for next observations (NOTE: This is memory intensive with
+    raw pixel states, as it doubles the space to store images. Keep this as False unless the
+    algorithm needs it).
     """
     if examples is None:
         if subprocess:
@@ -49,13 +55,26 @@ def build_intrinsic_samples_buffer(agent, env, batch_spec, bootstrap_value=False
     prev_reward = all_reward[:-1]  # Writing to reward will populate prev_reward.
     done = buffer_from_example(examples["done"], (T, B), env_shared)
     env_info = buffer_from_example(examples["env_info"], (T, B), env_shared)
-    env_buffer = EnvSamples(
-        observation=observation,
-        reward=reward,
-        prev_reward=prev_reward,
-        done=done,
-        env_info=env_info,
-    )
+
+    if next_obs:  # Add buffer space for next obs, if specified
+        next_observation = buffer_from_example(examples["observation"], (T, B), env_shared)
+        env_buffer = EnvSamplesPlus(
+            observation=observation,
+            next_observation=next_observation,
+            reward=reward,
+            prev_reward=prev_reward,
+            done=done,
+            env_info=env_info,
+        )
+    else:
+        env_buffer = EnvSamples(
+            observation=observation,
+            reward=reward,
+            prev_reward=prev_reward,
+            done=done,
+            env_info=env_info,
+        )
+
     samples_np = Samples(agent=agent_buffer, env=env_buffer)
     samples_pyt = torchify_buffer(samples_np)
     return samples_pyt, samples_np, examples

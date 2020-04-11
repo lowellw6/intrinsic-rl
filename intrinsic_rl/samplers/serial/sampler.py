@@ -29,6 +29,7 @@ class IntrinsicSerialSampler(SerialSampler):
             affinity=None,
             seed=None,
             bootstrap_value=False,
+            next_obs=False,
             traj_info_kwargs=None,
             rank=0,
             world_size=1,
@@ -46,7 +47,7 @@ class IntrinsicSerialSampler(SerialSampler):
             global_B=global_B, env_ranks=env_ranks)
         # Calls build_intrinsic_samples_buffer instead
         samples_pyt, samples_np, examples = build_intrinsic_samples_buffer(agent, envs[0],
-            self.batch_spec, bootstrap_value, agent_shared=False,
+            self.batch_spec, bootstrap_value, next_obs=next_obs, agent_shared=False,
             env_shared=False, subprocess=False)
         if traj_info_kwargs:
             for k, v in traj_info_kwargs.items():
@@ -103,6 +104,9 @@ class IntrinsicSerialSampler(SerialSampler):
             action = env.action_space.sample()
             obs, _, done, _ = env.step(action)
             obs = torch.from_numpy(obs).to(device=agent.device)
+            # Prepare observation, flattening channel dim (frame-stack) into batch dim for image input
+            if len(obs.shape) == 3:  # (C, H, W)
+                obs = obs.view((-1, 1, *obs.shape[1:]))
             agent.bonus_model.normalize_obs(obs)
             if done:
                 env.reset()
