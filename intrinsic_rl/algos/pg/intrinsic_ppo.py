@@ -19,7 +19,8 @@ OptInfo = namedarraytuple("OptInfo",
      "extrinsicValue", "intrinsicValue",
      "intrinsicReward", "discountedIntrinsicReturn",
      "gradNorm", "entropy", "perplexity",
-     "normNextObs", "normNextObsIsInf", "normNextObsIsNan"])
+     "meanNormNextObs", "minNormNextObs", "maxNormNextObs", "medNormNextObs", "stdNormNextObs",  # Along ob dims (C,H,W)
+     "normNextObsIsInf", "normNextObsIsNan"])
 
 
 class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
@@ -95,11 +96,21 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.discountedIntrinsicReturn.extend(int_return.flatten().tolist())
 
         # TEMPORARY logging to monitor observation normalization behavior
-        opt_info.normNextObs.extend(norm_next_obs.flatten().tolist())
-        norm_next_obs_is_inf = torch.isinf(norm_next_obs).to(torch.float)
-        norm_next_obs_is_nan = torch.isnan(norm_next_obs).to(torch.float)
-        opt_info.normNextObsIsInf.extend(norm_next_obs_is_inf.flatten().tolist())
-        opt_info.normNextObsIsNan.extend(norm_next_obs_is_nan.flatten().tolist())
+        bs = norm_next_obs.shape[0]
+        mean_norm_next_obs = norm_next_obs.mean(dim=(1, 2, 3))
+        opt_info.meanNormNextObs.extend(mean_norm_next_obs.flatten().tolist())
+        min_norm_next_obs = norm_next_obs.view(bs, -1).min(dim=-1)[0]
+        opt_info.minNormNextObs.extend(min_norm_next_obs.flatten().tolist())
+        max_norm_next_obs = norm_next_obs.view(bs, -1).max(dim=-1)[0]
+        opt_info.maxNormNextObs.extend(max_norm_next_obs.flatten().tolist())
+        med_norm_next_obs = norm_next_obs.view(bs, -1).median(dim=-1)[0]
+        opt_info.medNormNextObs.extend(med_norm_next_obs.flatten().tolist())
+        std_norm_next_obs = norm_next_obs.std(dim=(1, 2, 3))
+        opt_info.stdNormNextObs.extend(std_norm_next_obs.flatten().tolist())
+        norm_next_obs_is_inf = torch.isinf(norm_next_obs).to(torch.float).sum()
+        opt_info.normNextObsIsInf.extend([norm_next_obs_is_inf.item()])
+        norm_next_obs_is_nan = torch.isnan(norm_next_obs).to(torch.float).sum()
+        opt_info.normNextObsIsNan.extend([norm_next_obs_is_nan.item()])
 
         loss_inputs = LossInputs(  # So can slice all.
             agent_inputs=agent_inputs,
