@@ -18,7 +18,8 @@ OptInfo = namedarraytuple("OptInfo",
     ["loss", "policyLoss", "valueLoss", "entropyLoss", "bonusLoss",
      "extrinsicValue", "intrinsicValue",
      "intrinsicReward", "discountedIntrinsicReturn",
-     "gradNorm", "entropy", "perplexity"])
+     "gradNorm", "entropy", "perplexity",
+     "normNextObs", "normNextObsIsInf", "normNextObsIsNan"])
 
 
 class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
@@ -79,7 +80,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             action=samples.agent.action.flatten(end_dim=1)
         )
         self.agent.set_norm_update(True)  # Bonus model updates any normalization models in this call
-        int_rew, _ = self.agent.bonus_call(bonus_model_inputs)
+        int_rew, _, norm_next_obs = self.agent.bonus_call(bonus_model_inputs)
         int_rew = int_rew.view(batch_shape)
 
         # Process intrinsic returns and advantages
@@ -92,6 +93,13 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.intrinsicValue.extend(int_val.flatten().tolist())
         opt_info.intrinsicReward.extend(int_rew.flatten().tolist())
         opt_info.discountedIntrinsicReturn.extend(int_return.flatten().tolist())
+
+        # TEMPORARY logging to monitor observation normalization behavior
+        opt_info.normNextObs.extend(norm_next_obs.flatten().tolist())
+        norm_next_obs_is_inf = torch.isinf(norm_next_obs).to(torch.float)
+        norm_next_obs_is_nan = torch.isnan(norm_next_obs).to(torch.float)
+        opt_info.normNextObsIsInf.extend(norm_next_obs_is_inf.flatten().tolist())
+        opt_info.normNextObsIsNan.extend(norm_next_obs_is_nan.flatten().tolist())
 
         loss_inputs = LossInputs(  # So can slice all.
             agent_inputs=agent_inputs,
@@ -166,7 +174,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             next_observation=next_obs,  # May be same as observation (dummy placeholder) if algo set next_obs=False
             action=action
         )
-        _, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
+        _, bonus_loss, _ = self.agent.bonus_call(bonus_model_inputs)
         bonus_loss *= self.bonus_loss_coeff
 
         # Fuse reward streams by producing combined advantages
