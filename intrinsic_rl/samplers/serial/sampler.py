@@ -97,6 +97,7 @@ class IntrinsicSerialSampler(SerialSampler):
         Initializes observation normalization parameters in intrinsic bonus model.
         Uses distinct environment for this purpose.
         """
+        agent.set_norm_update(True)
         env = self.EnvCls(**self.env_kwargs)
         env.reset()
         logger.log(f"Sampler initializing bonus model observation normalization, steps: {self.obs_norm_steps}")

@@ -29,6 +29,7 @@ class RndBonusModule(SelfSupervisedModule):
         self.distill_model = RndCls(**rnd_model_kwargs)
         self.obs_rms = RunningMeanStdModel(rnd_model_kwargs["input_shape"])  # Requires RndCls takes input_shape
         self.int_rew_rms = RunningMeanStdModel(torch.Size([1]))
+        self.update_norm = True  # Default to updating obs and int_rew normalization models
 
     def normalize_obs(self, obs):
         """
@@ -44,7 +45,8 @@ class RndBonusModule(SelfSupervisedModule):
         if this model is initialized on raw obs in the sampler.
         """
         obs = obs.to(dtype=torch.float32)  # Obs may be byte tensor (e.g. 8-bit pixels)
-        self.obs_rms.update(obs)  
+        if self.update_norm:
+            self.obs_rms.update(obs)
         obs = (obs - self.obs_rms.mean) / (self.obs_rms.var.sqrt() + 1e-8)
         obs = torch.clamp(obs, min=-5, max=5)
         return obs
@@ -61,7 +63,8 @@ class RndBonusModule(SelfSupervisedModule):
         """
         batch_size = int_rew.numel()
         int_rew = int_rew.view((batch_size, 1))  # Ensures a non-batch dimension for RunningMeanStdModel
-        self.int_rew_rms.update(int_rew)
+        if self.update_norm:
+            self.int_rew_rms.update(int_rew)
         int_rew /= self.int_rew_rms.var.sqrt()
         return int_rew.squeeze()
 

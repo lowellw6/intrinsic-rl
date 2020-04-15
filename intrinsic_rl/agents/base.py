@@ -150,3 +150,13 @@ class IntrinsicBonusAgent(BaseAgent, ABC):
         super().eval_mode(itr)
         self.bonus_model.eval()
 
+    def set_norm_update(self, status):
+        """
+        Set update status for any normalization models (update or no update).
+        This is useful for when you want to call a normalization model
+        on the same data multiple times without repeating that data's
+        occurrence in the model.
+        """
+        assert type(status) == bool
+        self.bonus_model.update_norm = status
+

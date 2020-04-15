@@ -59,6 +59,7 @@ class IntrinsicGpuSamplerBase(GpuSamplerBase, IntrinsicParallelSamplerBase):
                 observation = observation.view((-1, 1, *observation.shape[2:]))
 
             # exercise observation normalization model
+            self.agent.set_norm_update(True)
             self.agent.bonus_model.normalize_obs(observation)
 
             # get random actions for workers

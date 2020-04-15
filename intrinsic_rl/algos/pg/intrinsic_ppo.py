@@ -78,6 +78,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             next_observation=next_obs.flatten(end_dim=1),  # May be same as observation (dummy placeholder) if algo set next_obs=False
             action=samples.agent.action.flatten(end_dim=1)
         )
+        self.agent.set_norm_update(True)  # Bonus model updates any normalization models in this call
         int_rew, _ = self.agent.bonus_call(bonus_model_inputs)
         int_rew = int_rew.view(batch_shape)
 
@@ -118,6 +119,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
                 rnn_state = init_rnn_state[B_idxs] if recurrent else None
                 # NOTE: if not recurrent, will lose leading T dim, should be OK.
                 # Combined loss produces single loss for both actor and bonus model
+                self.agent.set_norm_update(False)  # Avoids repeating any norm updates on same data in loss forward call
                 loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss = \
                     self.combined_loss(*loss_inputs[T_idxs, B_idxs], rnn_state)
                 loss.backward()
