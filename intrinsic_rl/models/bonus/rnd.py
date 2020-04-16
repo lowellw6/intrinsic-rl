@@ -47,7 +47,7 @@ class RndBonusModule(SelfSupervisedModule):
         obs = obs.to(dtype=torch.float32)  # Obs may be byte tensor (e.g. 8-bit pixels)
         if self.update_norm:
             self.obs_rms.update(obs)
-        obs = (obs - self.obs_rms.mean) / (self.obs_rms.var.sqrt() + 1e-8)
+        obs = (obs - self.obs_rms.mean) / torch.sqrt(self.obs_rms.var + 1e-5)
         obs = torch.clamp(obs, min=-5, max=5)
         return obs
 

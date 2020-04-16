@@ -20,7 +20,8 @@ OptInfo = namedarraytuple("OptInfo",
      "intrinsicReward", "discountedIntrinsicReturn",
      "gradNorm", "entropy", "perplexity",
      "meanNormNextObs", "minNormNextObs", "maxNormNextObs", "medNormNextObs", "stdNormNextObs",  # Along ob dims (C,H,W)
-     "normNextObsIsInf", "normNextObsIsNan"])
+     "normNextObsIsInf", "normNextObsIsNan",
+     "meanObsRmsModel", "varObsRmsModel"])
 
 
 class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
@@ -96,6 +97,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.discountedIntrinsicReturn.extend(int_return.flatten().tolist())
 
         # TEMPORARY logging to monitor observation normalization behavior
+        opt_info.meanObsRmsModel.extend(self.agent.bonus_model.obs_rms.mean.flatten().tolist())
+        opt_info.varObsRmsModel.extend(self.agent.bonus_model.obs_rms.var.flatten().tolist())
         bs = norm_next_obs.shape[0]
         mean_norm_next_obs = norm_next_obs.mean(dim=(1, 2, 3))
         opt_info.meanNormNextObs.extend(mean_norm_next_obs.flatten().tolist())
