@@ -12,6 +12,8 @@ from rlpyt.utils.collections import namedarraytuple
 
 from intrinsic_rl.algos.pg.base import IntrinsicPolicyGradientAlgo
 
+import cv2  ###
+
 LossInputs = namedarraytuple("LossInputs",
     ["agent_inputs", "action", "next_obs", "ext_return", "ext_adv", "int_return", "int_adv", "valid", "old_dist_info"])
 OptInfo = namedarraytuple("OptInfo",
@@ -113,6 +115,16 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.medNextObs.extend(med_next_obs.flatten().tolist())
         std_next_obs = fl_next_obs.std(dim=(2, 3, 4))
         opt_info.stdNextObs.extend(std_next_obs.flatten().tolist())
+
+        # Save obs with non-zero min pixel values for investigation...
+        capture_inds = min_next_obs.nonzero()
+        if capture_inds.nelement() > 0:
+            for ind in capture_inds:
+                tt, bb = tuple(ind.numpy().astype("uint32"))
+                imgOut = next_obs[tt, bb].numpy()
+                shape = imgOut.shape
+                imgOut = imgOut.reshape(shape[0] * shape[1], shape[2])
+                cv2.imwrite(f"suspectNextOb_Itr{str(itr)}_T{str(tt)}_B{str(bb)}.png", imgOut)
 
         bs = norm_next_obs.shape[0]
         mean_norm_next_obs = norm_next_obs.mean(dim=(1, 2, 3))
