@@ -232,6 +232,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
 
         ext_value_error = 0.5 * (ext_value - ext_return) ** 2
         int_value_error = 0.5 * (int_value - int_return) ** 2
+        int_value_error = torch.clamp(int_value_error, 0, 5)  # Testing stability against clamped intrinsic value loss
         value_loss = self.value_loss_coeff * (valid_mean(ext_value_error, valid) + int_value_error.mean())
 
         entropy = dist.mean_entropy(dist_info, valid)
