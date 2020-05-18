@@ -28,7 +28,7 @@ class RndBonusModule(SelfSupervisedModule):
         self.target_model = RndCls(**rnd_model_kwargs)
         self.distill_model = RndCls(**rnd_model_kwargs)
         self.obs_rms = RunningMeanStdModel(rnd_model_kwargs["input_shape"])  # Requires RndCls takes input_shape
-        self.int_rew_rms = RunningMeanStdModel(torch.Size([1]))
+        self.int_ret_rms = RunningMeanStdModel(torch.Size([1]))
         self.update_norm = True  # Default to updating obs and int_rew normalization models
 
     def normalize_obs(self, obs):
@@ -61,12 +61,19 @@ class RndBonusModule(SelfSupervisedModule):
         This model is *not* expected to be initialized, if following the authors'
         implementation.
         """
-        batch_size = int_rew.numel()
-        int_rew = int_rew.view((batch_size, 1))  # Ensures a non-batch dimension for RunningMeanStdModel
+        int_rew /= torch.sqrt(self.int_ret_rms.var + 1e-5)
+        return int_rew
+
+    def update_int_ret_rms(self, int_ret):
+        """
+        Updates RunningMeanStdModel used in ``normalize_int_rew``.
+        Note while the model is used to normalize the intrinsic rewards,
+        its model parameters are updated with the intrinsic **returns**.
+        """
         if self.update_norm:
-            self.int_rew_rms.update(int_rew)
-        int_rew /= self.int_rew_rms.var.sqrt()
-        return int_rew.squeeze()
+            batch_size = int_ret.numel()
+            int_ret = int_ret.view((batch_size, 1))
+            self.int_ret_rms.update(int_ret)
 
     def forward(self, next_obs):
         """

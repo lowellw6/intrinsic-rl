@@ -84,13 +84,16 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             next_observation=next_obs.flatten(end_dim=1),  # May be same as observation (dummy placeholder) if algo set next_obs=False
             action=samples.agent.action.flatten(end_dim=1)
         )
-        self.agent.set_norm_update(True)  # Bonus model updates any normalization models in this call
+        self.agent.set_norm_update(True)  # Bonus model will update any normalization models where applicable
         int_rew, _, norm_next_obs = self.agent.bonus_call(bonus_model_inputs)
         int_rew = int_rew.view(batch_shape)
 
-        # Process intrinsic returns and advantages
+        # Process intrinsic returns and advantages (updating intrinsic reward normalization model, if applicable)
         int_val, int_bv = samples.agent.agent_info.int_value, samples.agent.int_bootstrap_value
         int_return, int_adv = self.process_intrinsic_returns(int_rew, int_val, int_bv)
+
+        # Avoid repeating any norm updates on same data in subsequent loss forward calls
+        self.agent.set_norm_update(False)
 
         # Add front-processed optimizer data to logging buffer
         # Flattened to match elsewhere, though the ultimate statistics summarize over all dims anyway
@@ -117,6 +120,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.stdNextObs.extend(std_next_obs.flatten().tolist())
 
         # Save obs with non-zero min pixel values for investigation...
+        """
         capture_inds = min_next_obs.nonzero()
         if capture_inds.nelement() > 0:
             for ind in capture_inds:
@@ -125,6 +129,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
                 shape = imgOut.shape
                 imgOut = imgOut.reshape(shape[0] * shape[1], shape[2])
                 cv2.imwrite(f"suspectNextOb_Itr{str(itr)}_T{str(tt)}_B{str(bb)}.png", imgOut)
+        """
 
         bs = norm_next_obs.shape[0]
         mean_norm_next_obs = norm_next_obs.mean(dim=(1, 2, 3))
@@ -168,7 +173,6 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
                 rnn_state = init_rnn_state[B_idxs] if recurrent else None
                 # NOTE: if not recurrent, will lose leading T dim, should be OK.
                 # Combined loss produces single loss for both actor and bonus model
-                self.agent.set_norm_update(False)  # Avoids repeating any norm updates on same data in loss forward call
                 loss, entropy, perplexity, pi_loss, value_loss, entropy_loss, bonus_loss = \
                     self.combined_loss(*loss_inputs[T_idxs, B_idxs], rnn_state)
                 loss.backward()
@@ -232,7 +236,6 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
 
         ext_value_error = 0.5 * (ext_value - ext_return) ** 2
         int_value_error = 0.5 * (int_value - int_return) ** 2
-        int_value_error = torch.clamp(int_value_error, 0, 5)  # Testing stability against clamped intrinsic value loss
         value_loss = self.value_loss_coeff * (valid_mean(ext_value_error, valid) + int_value_error.mean())
 
         entropy = dist.mean_entropy(dist_info, valid)
