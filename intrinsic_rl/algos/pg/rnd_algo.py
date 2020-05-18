@@ -12,5 +12,5 @@ class RndIntrinsicPPO(IntrinsicPPO):
         this on or off using ``set_norm_update`` method.
         """
         int_return, int_adv = super().process_intrinsic_returns(int_rew, int_val, int_bootstrap_value)
-        self.agent.bonus_model.update_int_ret_rms(int_return)
+        self.agent.bonus_model.update_int_ret_rms(int_return.to(self.agent.device))
         return int_return, int_adv
