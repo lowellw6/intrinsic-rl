@@ -75,7 +75,7 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
 
     config = dict(game=game)
     name = "intrinsicPPO_" + game
-    log_dir = "rnd_pure_exploration"
+    log_dir = "rnd_atari"
     set_snapshot_gap(1000)  # Save parameter checkpoint every 1000 training iterations
     with logger_context(log_dir, run_ID, name, config, snapshot_mode="gap"):
         runner.train()

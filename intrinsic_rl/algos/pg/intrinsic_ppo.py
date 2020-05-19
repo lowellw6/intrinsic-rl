@@ -107,8 +107,9 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.varObsRmsModel.extend(self.agent.bonus_model.obs_rms.var.flatten().tolist())
 
         t, b = next_obs.shape[0:2]
+        reduce_dims = 2 if len(next_obs.shape[2:]) == 1 else (2, 3, 4)
         fl_next_obs = next_obs.to(dtype=torch.float)
-        mean_next_obs = fl_next_obs.mean(dim=(2, 3, 4))
+        mean_next_obs = fl_next_obs.mean(dim=reduce_dims)
         opt_info.meanNextObs.extend(mean_next_obs.flatten().tolist())
         min_next_obs = fl_next_obs.view(t, b, -1).min(dim=-1)[0]
         opt_info.minNextObs.extend(min_next_obs.flatten().tolist())
@@ -116,7 +117,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.maxNextObs.extend(max_next_obs.flatten().tolist())
         med_next_obs = fl_next_obs.view(t, b, -1).median(dim=-1)[0]
         opt_info.medNextObs.extend(med_next_obs.flatten().tolist())
-        std_next_obs = fl_next_obs.std(dim=(2, 3, 4))
+        std_next_obs = fl_next_obs.std(dim=reduce_dims)
         opt_info.stdNextObs.extend(std_next_obs.flatten().tolist())
 
         # Save obs with non-zero min pixel values for investigation...
@@ -132,7 +133,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         """
 
         bs = norm_next_obs.shape[0]
-        mean_norm_next_obs = norm_next_obs.mean(dim=(1, 2, 3))
+        norm_reduce_dims = 1 if len(norm_next_obs.shape[1:]) == 1 else (1, 2, 3)
+        mean_norm_next_obs = norm_next_obs.mean(dim=norm_reduce_dims)
         opt_info.meanNormNextObs.extend(mean_norm_next_obs.flatten().tolist())
         min_norm_next_obs = norm_next_obs.view(bs, -1).min(dim=-1)[0]
         opt_info.minNormNextObs.extend(min_norm_next_obs.flatten().tolist())
@@ -140,7 +142,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.maxNormNextObs.extend(max_norm_next_obs.flatten().tolist())
         med_norm_next_obs = norm_next_obs.view(bs, -1).median(dim=-1)[0]
         opt_info.medNormNextObs.extend(med_norm_next_obs.flatten().tolist())
-        std_norm_next_obs = norm_next_obs.std(dim=(1, 2, 3))
+        std_norm_next_obs = norm_next_obs.std(dim=norm_reduce_dims)
         opt_info.stdNormNextObs.extend(std_norm_next_obs.flatten().tolist())
         norm_next_obs_is_inf = torch.isinf(norm_next_obs).to(torch.float).sum()
         opt_info.normNextObsIsInf.extend([norm_next_obs_is_inf.item()])

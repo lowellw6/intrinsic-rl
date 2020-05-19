@@ -5,6 +5,7 @@ from rlpyt.models.running_mean_std import RunningMeanStdModel
 
 from intrinsic_rl.models.bonus.base import SelfSupervisedModule
 from intrinsic_rl.models.bonus.feat_embed import BaseFeatureExtractor
+from intrinsic_rl.util import wrap
 
 
 class RndBonusModule(SelfSupervisedModule):
@@ -27,7 +28,7 @@ class RndBonusModule(SelfSupervisedModule):
         super().__init__()
         self.target_model = RndCls(**rnd_model_kwargs)
         self.distill_model = RndCls(**rnd_model_kwargs)
-        self.obs_rms = RunningMeanStdModel(rnd_model_kwargs["input_shape"])  # Requires RndCls takes input_shape
+        self.obs_rms = RunningMeanStdModel(wrap(rnd_model_kwargs["input_shape"]))  # Requires RndCls takes input_shape
         self.int_ret_rms = RunningMeanStdModel(torch.Size([1]))
         self.update_norm = True  # Default to updating obs and int_rew normalization models
 
