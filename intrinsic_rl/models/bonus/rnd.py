@@ -1,11 +1,28 @@
 
 import torch
+import torch.nn.init as init
 
 from rlpyt.models.running_mean_std import RunningMeanStdModel
 
 from intrinsic_rl.models.bonus.base import SelfSupervisedModule
 from intrinsic_rl.models.bonus.feat_embed import BaseFeatureExtractor
 from intrinsic_rl.util import wrap
+
+
+def rnd_param_init_(module):
+    """
+    Initializes RND module weights and biases to match that in:
+    https://github.com/openai/random-network-distillation/blob/master/policies/cnn_policy_param_matched.py.
+
+    The authors initialize all conv and dense weights orthogonally with gain sqrt(2),
+    and constant initialize all conv and dense biases to 0.
+    """
+    for name, parameter in module.named_parameters():
+        tokens = name.split('.')
+        if "weight" in tokens:
+            init.orthogonal_(parameter, gain=(2 ** 0.5))
+        elif "bias" in tokens:
+            init.constant_(parameter, val=0.)
 
 
 class RndBonusModule(SelfSupervisedModule):
@@ -28,6 +45,8 @@ class RndBonusModule(SelfSupervisedModule):
         super().__init__()
         self.target_model = RndCls(**rnd_model_kwargs)
         self.distill_model = RndCls(**rnd_model_kwargs)
+        rnd_param_init_(self.target_model)
+        rnd_param_init_(self.distill_model)
         self.obs_rms = RunningMeanStdModel(wrap(rnd_model_kwargs["input_shape"]))  # Requires RndCls takes input_shape
         self.int_ret_rms = RunningMeanStdModel(torch.Size([1]))
         self.update_norm = True  # Default to updating obs and int_rew normalization models
