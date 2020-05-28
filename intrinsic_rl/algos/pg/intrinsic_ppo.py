@@ -21,7 +21,8 @@ OptInfo = namedarraytuple("OptInfo",
      "extrinsicValue", "intrinsicValue",
      "intrinsicReward", "discountedIntrinsicReturn",
      "gradNorm", "entropy", "perplexity",
-     "meanObsRmsModel", "varObsRmsModel"])
+     "meanObsRmsModel", "varObsRmsModel",
+     "meanIntRetRmsModel", "varIntRetRmsModel"])
 
 
 class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
@@ -100,6 +101,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.discountedIntrinsicReturn.extend(int_return.flatten().tolist())
         opt_info.meanObsRmsModel.extend(self.agent.bonus_model.obs_rms.mean.flatten().tolist())
         opt_info.varObsRmsModel.extend(self.agent.bonus_model.obs_rms.var.flatten().tolist())
+        opt_info.meanIntRetRmsModel.extend(self.agent.bonus_model.int_ret_rms.mean.flatten().tolist())
+        opt_info.varIntRetRmsModel.extend(self.agent.bonus_model.int_ret_rms.var.flatten().tolist())
 
         loss_inputs = LossInputs(  # So can slice all.
             agent_inputs=agent_inputs,
