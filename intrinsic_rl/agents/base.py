@@ -51,8 +51,8 @@ class IntrinsicBonusAgent(BaseAgent, ABC):
         action inputs have already been appropriately formatted for the model using ``format_actions``.
         """
         bonus_model_inputs = buffer_to(bonus_model_inputs, device=self.device)
-        int_rew, bonus_loss, norm_next_obs = self.bonus_model(*bonus_model_inputs)
-        return buffer_to((int_rew, bonus_loss, norm_next_obs), device="cpu")
+        int_rew, bonus_loss = self.bonus_model(*bonus_model_inputs)
+        return buffer_to((int_rew, bonus_loss), device="cpu")
 
     def initialize(self, env_spaces, share_memory=False, **kwargs):
         """

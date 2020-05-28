@@ -21,9 +21,6 @@ OptInfo = namedarraytuple("OptInfo",
      "extrinsicValue", "intrinsicValue",
      "intrinsicReward", "discountedIntrinsicReturn",
      "gradNorm", "entropy", "perplexity",
-     "meanNextObs", "minNextObs", "maxNextObs", "medNextObs", "stdNextObs",  # Along ob dims (C,H,W)
-     "meanNormNextObs", "minNormNextObs", "maxNormNextObs", "medNormNextObs", "stdNormNextObs",  # Along ob dims (C,H,W)
-     "normNextObsIsInf", "normNextObsIsNan",
      "meanObsRmsModel", "varObsRmsModel"])
 
 
@@ -85,7 +82,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             action=samples.agent.action.flatten(end_dim=1)
         )
         self.agent.set_norm_update(True)  # Bonus model will update any normalization models where applicable
-        int_rew, _, norm_next_obs = self.agent.bonus_call(bonus_model_inputs)
+        int_rew, _ = self.agent.bonus_call(bonus_model_inputs)
         int_rew = int_rew.view(batch_shape)
 
         # Process intrinsic returns and advantages (updating intrinsic reward normalization model, if applicable)
@@ -101,53 +98,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
         opt_info.intrinsicValue.extend(int_val.flatten().tolist())
         opt_info.intrinsicReward.extend(int_rew.flatten().tolist())
         opt_info.discountedIntrinsicReturn.extend(int_return.flatten().tolist())
-
-        # TEMPORARY logging to monitor observation normalization behavior
         opt_info.meanObsRmsModel.extend(self.agent.bonus_model.obs_rms.mean.flatten().tolist())
         opt_info.varObsRmsModel.extend(self.agent.bonus_model.obs_rms.var.flatten().tolist())
-
-        t, b = next_obs.shape[0:2]
-        reduce_dims = 2 if len(next_obs.shape[2:]) == 1 else (2, 3, 4)
-        fl_next_obs = next_obs.to(dtype=torch.float)
-        mean_next_obs = fl_next_obs.mean(dim=reduce_dims)
-        opt_info.meanNextObs.extend(mean_next_obs.flatten().tolist())
-        min_next_obs = fl_next_obs.view(t, b, -1).min(dim=-1)[0]
-        opt_info.minNextObs.extend(min_next_obs.flatten().tolist())
-        max_next_obs = fl_next_obs.view(t, b, -1).max(dim=-1)[0]
-        opt_info.maxNextObs.extend(max_next_obs.flatten().tolist())
-        med_next_obs = fl_next_obs.view(t, b, -1).median(dim=-1)[0]
-        opt_info.medNextObs.extend(med_next_obs.flatten().tolist())
-        std_next_obs = fl_next_obs.std(dim=reduce_dims)
-        opt_info.stdNextObs.extend(std_next_obs.flatten().tolist())
-
-        # Save obs with non-zero min pixel values for investigation...
-        """
-        capture_inds = min_next_obs.nonzero()
-        if capture_inds.nelement() > 0:
-            for ind in capture_inds:
-                tt, bb = tuple(ind.numpy().astype("uint32"))
-                imgOut = next_obs[tt, bb].numpy()
-                shape = imgOut.shape
-                imgOut = imgOut.reshape(shape[0] * shape[1], shape[2])
-                cv2.imwrite(f"suspectNextOb_Itr{str(itr)}_T{str(tt)}_B{str(bb)}.png", imgOut)
-        """
-
-        bs = norm_next_obs.shape[0]
-        norm_reduce_dims = 1 if len(norm_next_obs.shape[1:]) == 1 else (1, 2, 3)
-        mean_norm_next_obs = norm_next_obs.mean(dim=norm_reduce_dims)
-        opt_info.meanNormNextObs.extend(mean_norm_next_obs.flatten().tolist())
-        min_norm_next_obs = norm_next_obs.view(bs, -1).min(dim=-1)[0]
-        opt_info.minNormNextObs.extend(min_norm_next_obs.flatten().tolist())
-        max_norm_next_obs = norm_next_obs.view(bs, -1).max(dim=-1)[0]
-        opt_info.maxNormNextObs.extend(max_norm_next_obs.flatten().tolist())
-        med_norm_next_obs = norm_next_obs.view(bs, -1).median(dim=-1)[0]
-        opt_info.medNormNextObs.extend(med_norm_next_obs.flatten().tolist())
-        std_norm_next_obs = norm_next_obs.std(dim=norm_reduce_dims)
-        opt_info.stdNormNextObs.extend(std_norm_next_obs.flatten().tolist())
-        norm_next_obs_is_inf = torch.isinf(norm_next_obs).to(torch.float).sum()
-        opt_info.normNextObsIsInf.extend([norm_next_obs_is_inf.item()])
-        norm_next_obs_is_nan = torch.isnan(norm_next_obs).to(torch.float).sum()
-        opt_info.normNextObsIsNan.extend([norm_next_obs_is_nan.item()])
 
         loss_inputs = LossInputs(  # So can slice all.
             agent_inputs=agent_inputs,
@@ -221,7 +173,7 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             next_observation=next_obs,  # May be same as observation (dummy placeholder) if algo set next_obs=False
             action=action
         )
-        _, bonus_loss, _ = self.agent.bonus_call(bonus_model_inputs)
+        _, bonus_loss = self.agent.bonus_call(bonus_model_inputs)
         bonus_loss *= self.bonus_loss_coeff
 
         # Fuse reward streams by producing combined advantages

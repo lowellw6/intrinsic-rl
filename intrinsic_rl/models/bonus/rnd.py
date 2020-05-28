@@ -107,4 +107,4 @@ class RndBonusModule(SelfSupervisedModule):
         pred_errors = torch.mean((distill_feat - target_feat.detach()) ** 2, dim=-1)  # Maintains batch dimension
         distill_loss = torch.mean(pred_errors)  # Reduces batch dimension
         int_rew = self.normalize_int_rew(pred_errors.detach())
-        return int_rew, distill_loss, next_obs  # Returns normalized next obs for logging
+        return int_rew, distill_loss
