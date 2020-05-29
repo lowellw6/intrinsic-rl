@@ -5,6 +5,7 @@ from rlpyt.envs.atari.atari_env import AtariEnv, AtariTrajInfo
 from rlpyt.utils.logging.context import logger_context
 from rlpyt.utils.logging.logger import set_snapshot_gap
 
+from intrinsic_rl.envs.atari.montezuma import MontezumaEnv, MontezumaTrajInfo
 from intrinsic_rl.runners.minibatch_rl import MinibatchRlFlex
 from intrinsic_rl.samplers.serial.sampler import IntrinsicSerialSampler
 from intrinsic_rl.samplers.parallel.gpu.sampler import IntrinsicGpuSampler
@@ -22,11 +23,12 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
         Sampler = IntrinsicGpuSampler
         print(f"Using GPU parallel sampler (agent in master), {gpu_cpu} for sampling and optimizing.")
 
+    env_cls, traj_info_cls = (MontezumaEnv, MontezumaTrajInfo) if game == "montezuma_revenge" else (AtariEnv, AtariTrajInfo)
     env_kwargs = dict(game=game, repeat_action_probability=0.25, horizon=int(18e3))
 
     sampler = Sampler(
-        EnvCls=AtariEnv,
-        TrajInfoCls=AtariTrajInfo,  # default traj info + GameScore
+        EnvCls=env_cls,
+        TrajInfoCls=traj_info_cls,
         env_kwargs=env_kwargs,
         batch_T=128,
         batch_B=64,
