@@ -70,7 +70,8 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
         sampler=sampler,
         n_steps=int(49152e4),  # this is 30k rollouts per environment at (T, B) = (128, 128)
         log_interval_steps=int(1e3),
-        affinity=affinity
+        affinity=affinity,
+        seed=314
     )
 
     config = dict(game=game)
