@@ -24,7 +24,7 @@ def build_and_train(game="breakout", run_ID=0, cuda_idx=None, sample_mode="seria
         print(f"Using GPU parallel sampler (agent in master), {gpu_cpu} for sampling and optimizing.")
 
     env_cls, traj_info_cls = (MontezumaEnv, MontezumaTrajInfo) if game == "montezuma_revenge" else (AtariEnv, AtariTrajInfo)
-    env_kwargs = dict(game=game, repeat_action_probability=0.25, horizon=int(18e3))
+    env_kwargs = dict(game=game, repeat_action_probability=0.25, horizon=int(45e2))
 
     sampler = Sampler(
         EnvCls=env_cls,
