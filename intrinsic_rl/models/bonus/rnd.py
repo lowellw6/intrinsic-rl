@@ -48,7 +48,8 @@ class RndBonusModule(SelfSupervisedModule):
         rnd_param_init_(self.target_model)
         rnd_param_init_(self.distill_model)
         self.obs_rms = RunningMeanStdModel(wrap(rnd_model_kwargs["input_shape"]))  # Requires RndCls takes input_shape
-        self.int_ret_rms = RunningMeanStdModel(torch.Size([1]))
+        self.int_rff = None  # Intrinsic reward forward filter (this stores a discounted sum of non-episodic rewards)
+        self.int_rff_rms = RunningMeanStdModel(torch.Size([1]))  # Intrinsic reward forward filter RMS model
         self.update_norm = True  # Default to updating obs and int_rew normalization models
 
     def normalize_obs(self, obs):
@@ -71,7 +72,7 @@ class RndBonusModule(SelfSupervisedModule):
         obs = torch.clamp(obs, min=-5, max=5)
         return obs
 
-    def normalize_int_rew(self, int_rew):
+    def normalize_int_rew(self, int_rew, gamma=0.99):
         """
         Normalizes intrinsic rewards according to specifications in
         https://arxiv.org/abs/1810.12894. This is done to remove the
@@ -81,19 +82,25 @@ class RndBonusModule(SelfSupervisedModule):
         This model is *not* expected to be initialized, if following the authors'
         implementation.
         """
-        int_rew /= torch.sqrt(self.int_ret_rms.var + 1e-5)
-        return int_rew
+        # Update rewards forward filter and gather batch of results
+        rff_batch = torch.empty_like(int_rew)
+        int_rff_prior = self.int_rff
+        for i, rews in enumerate(int_rew):
+            if self.int_rff is None:
+                self.int_rff = rews
+            else:
+                self.int_rff = self.int_rff * gamma + rews
+            rff_batch[i, :] = self.int_rff
 
-    def update_int_ret_rms(self, int_ret):
-        """
-        Updates RunningMeanStdModel used in ``normalize_int_rew``.
-        Note while the model is used to normalize the intrinsic rewards,
-        its model parameters are updated with the intrinsic **returns**.
-        """
+        # Update intrinsic rff rms for int rew normalization if updating norm models
         if self.update_norm:
-            batch_size = int_ret.numel()
-            int_ret = int_ret.view((batch_size, 1))
-            self.int_ret_rms.update(int_ret)
+            batch_size = rff_batch.numel()
+            self.int_rff_rms.update(rff_batch.view((batch_size, 1)))
+        else:  # Reset rff prior state if not updating norm models
+            self.int_rff = int_rff_prior
+
+        # Normalize by dividing out running std of rff values
+        return int_rew / torch.sqrt(self.int_rff_rms.var)
 
     def forward(self, next_obs):
         """
@@ -106,5 +113,5 @@ class RndBonusModule(SelfSupervisedModule):
         target_feat, _ = self.target_model(next_obs)
         pred_errors = torch.mean((distill_feat - target_feat.detach()) ** 2, dim=-1)  # Maintains batch dimension
         distill_loss = torch.mean(pred_errors)  # Reduces batch dimension
-        int_rew = self.normalize_int_rew(pred_errors.detach())
+        int_rew = pred_errors.detach()
         return int_rew, distill_loss
