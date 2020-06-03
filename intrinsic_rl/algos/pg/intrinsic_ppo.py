@@ -83,7 +83,8 @@ class IntrinsicPPO(PPO, IntrinsicPolicyGradientAlgo, ABC):
             action=samples.agent.action.flatten(end_dim=1)
         )
         self.agent.set_norm_update(True)  # Bonus model will update any normalization models where applicable
-        int_rew, _ = self.agent.bonus_call(bonus_model_inputs)
+        with torch.no_grad():
+            int_rew, _ = self.agent.bonus_call(bonus_model_inputs)
         int_rew = int_rew.view(batch_shape)
 
         # Process intrinsic returns and advantages (updating intrinsic reward normalization model, if applicable)
