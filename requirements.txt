@@ -8,7 +8,7 @@ future==0.18.2
 -e git+https://github.com/maximecb/gym-minigrid.git@a5f4ef3684875eba613087dcef21be57c186bdc8#egg=gym_minigrid
 -e git+https://github.com/lowellw6/intrinsic-rl.git@f6d67284edca7fdf934f5d973a120a2bcce1fac5#egg=intrinsic_rl
 itsdangerous==1.1.0
-Jinja2==2.11.1
+Jinja2==2.11.3
 kiwisolver==1.1.0
 MarkupSafe==1.1.1
 matplotlib==2.0.2
